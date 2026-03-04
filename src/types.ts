@@ -9,6 +9,7 @@ export interface Issue {
 	closeReason?: string;
 	blocks?: string[];
 	blockedBy?: string[];
+	labels?: string[];
 	convoy?: string;
 	createdAt: string;
 	updatedAt: string;

@@ -58,6 +58,36 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	if (typeFilter) issues = issues.filter((i: Issue) => i.type === typeFilter);
 	if (assigneeFilter) issues = issues.filter((i: Issue) => i.assignee === assigneeFilter);
 
+	const labelFilter = typeof flags.label === "string" ? flags.label : undefined;
+	const labelAnyFilter = typeof flags["label-any"] === "string" ? flags["label-any"] : undefined;
+	const unlabeled = flags.unlabeled === true;
+
+	if (labelFilter) {
+		const required = labelFilter
+			.split(",")
+			.map((l) => l.trim().toLowerCase())
+			.filter(Boolean);
+		issues = issues.filter((i: Issue) => {
+			const labels = i.labels ?? [];
+			return required.every((r) => labels.includes(r));
+		});
+	}
+	if (labelAnyFilter) {
+		const any = new Set(
+			labelAnyFilter
+				.split(",")
+				.map((l) => l.trim().toLowerCase())
+				.filter(Boolean),
+		);
+		issues = issues.filter((i: Issue) => {
+			const labels = i.labels ?? [];
+			return labels.some((l) => any.has(l));
+		});
+	}
+	if (unlabeled) {
+		issues = issues.filter((i: Issue) => !i.labels || i.labels.length === 0);
+	}
+
 	issues = issues.slice(0, limit);
 
 	if (jsonMode) {
@@ -82,6 +112,9 @@ export function register(program: Command): void {
 		.option("--type <type>", "Filter by type (task|bug|feature|epic)")
 		.option("--assignee <name>", "Filter by assignee")
 		.option("--all", "Include closed issues (default: only open/in_progress)")
+		.option("--label <labels>", "Filter: must have ALL labels (comma-separated, AND)")
+		.option("--label-any <labels>", "Filter: must have any label (comma-separated, OR)")
+		.option("--unlabeled", "Filter: issues with no labels")
 		.option("--limit <n>", "Max issues to show", "50")
 		.option("--json", "Output as JSON")
 		.action(
@@ -89,6 +122,9 @@ export function register(program: Command): void {
 				status?: string;
 				type?: string;
 				assignee?: string;
+				label?: string;
+				labelAny?: string;
+				unlabeled?: boolean;
 				all?: boolean;
 				limit?: string;
 				json?: boolean;
@@ -97,6 +133,9 @@ export function register(program: Command): void {
 				if (opts.status) args.push("--status", opts.status);
 				if (opts.type) args.push("--type", opts.type);
 				if (opts.assignee) args.push("--assignee", opts.assignee);
+				if (opts.label) args.push("--label", opts.label);
+				if (opts.labelAny) args.push("--label-any", opts.labelAny);
+				if (opts.unlabeled) args.push("--unlabeled");
 				if (opts.all) args.push("--all");
 				if (opts.limit) args.push("--limit", opts.limit);
 				if (opts.json) args.push("--json");

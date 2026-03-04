@@ -64,6 +64,14 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		throw new Error("--priority must be 0-4 or P0-P4");
 	}
 
+	const labelsRaw = typeof flags.labels === "string" ? flags.labels : undefined;
+	const labels = labelsRaw
+		? labelsRaw
+				.split(",")
+				.map((l) => l.trim().toLowerCase())
+				.filter(Boolean)
+		: undefined;
+
 	const assignee = typeof flags.assignee === "string" ? flags.assignee : undefined;
 	const description =
 		typeof flags.description === "string"
@@ -91,6 +99,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			updatedAt: now,
 			...(assignee ? { assignee } : {}),
 			...(description ? { description } : {}),
+			...(labels && labels.length > 0 ? { labels } : {}),
 		};
 		await appendIssue(dir, issue);
 		createdId = id;
@@ -113,6 +122,7 @@ export function register(program: Command): void {
 		.option("--assignee <name>", "Assignee name")
 		.option("--description <text>", "Issue description")
 		.option("--desc <text>", "Issue description (alias for --description)")
+		.option("--labels <labels>", "Comma-separated labels")
 		.option("--json", "Output as JSON")
 		.action(
 			async (opts: {
@@ -122,6 +132,7 @@ export function register(program: Command): void {
 				assignee?: string;
 				description?: string;
 				desc?: string;
+				labels?: string;
 				json?: boolean;
 			}) => {
 				const args: string[] = ["--title", opts.title];
@@ -130,6 +141,7 @@ export function register(program: Command): void {
 				if (opts.assignee) args.push("--assignee", opts.assignee);
 				if (opts.description) args.push("--description", opts.description);
 				if (opts.desc) args.push("--desc", opts.desc);
+				if (opts.labels) args.push("--labels", opts.labels);
 				if (opts.json) args.push("--json");
 				await run(args);
 			},

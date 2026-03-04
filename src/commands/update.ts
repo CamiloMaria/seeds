@@ -85,6 +85,34 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			patch.priority = p;
 		}
 
+		if (typeof flags["set-labels"] === "string") {
+			const val = flags["set-labels"];
+			if (val === "") {
+				patch.labels = undefined;
+			} else {
+				const parsed = val
+					.split(",")
+					.map((l) => l.trim().toLowerCase())
+					.filter(Boolean);
+				patch.labels = parsed.length > 0 ? parsed : undefined;
+			}
+		}
+		if (typeof flags["add-label"] === "string") {
+			const toAdd = flags["add-label"]
+				.split(",")
+				.map((l) => l.trim().toLowerCase())
+				.filter(Boolean);
+			const base = patch.labels ?? issue.labels ?? [];
+			const merged = Array.from(new Set([...base, ...toAdd]));
+			patch.labels = merged.length > 0 ? merged : undefined;
+		}
+		if (typeof flags["remove-label"] === "string") {
+			const toRemove = new Set(flags["remove-label"].split(",").map((l) => l.trim().toLowerCase()));
+			const base = patch.labels ?? issue.labels ?? [];
+			const remaining = base.filter((l) => !toRemove.has(l));
+			patch.labels = remaining.length > 0 ? remaining : undefined;
+		}
+
 		issues[idx] = { ...issue, ...patch };
 		updated = issues[idx];
 		await writeIssues(dir, issues);
@@ -108,6 +136,9 @@ export function register(program: Command): void {
 		.option("--desc <text>", "New description (alias for --description)")
 		.option("--type <type>", "New type (task|bug|feature|epic)")
 		.option("--priority <n>", "New priority 0-4 or P0-P4")
+		.option("--add-label <labels>", "Add label(s) (comma-separated)")
+		.option("--remove-label <labels>", "Remove label(s) (comma-separated)")
+		.option("--set-labels <labels>", "Set labels (comma-separated, empty to clear)")
 		.option("--json", "Output as JSON")
 		.action(
 			async (
@@ -120,6 +151,9 @@ export function register(program: Command): void {
 					desc?: string;
 					type?: string;
 					priority?: string;
+					addLabel?: string;
+					removeLabel?: string;
+					setLabels?: string;
 					json?: boolean;
 				},
 			) => {
@@ -131,6 +165,9 @@ export function register(program: Command): void {
 				if (opts.desc) args.push("--desc", opts.desc);
 				if (opts.type) args.push("--type", opts.type);
 				if (opts.priority) args.push("--priority", opts.priority);
+				if (opts.addLabel) args.push("--add-label", opts.addLabel);
+				if (opts.removeLabel) args.push("--remove-label", opts.removeLabel);
+				if (opts.setLabels !== undefined) args.push("--set-labels", opts.setLabels);
 				if (opts.json) args.push("--json");
 				await run(args);
 			},

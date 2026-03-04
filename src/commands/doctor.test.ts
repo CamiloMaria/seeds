@@ -484,7 +484,7 @@ describe("doctor: json output", () => {
 		expect(result.success).toBe(true);
 		expect(result.summary.fail).toBe(0);
 		expect(result.summary.warn).toBe(0);
-		expect(result.summary.pass).toBe(9);
+		expect(result.summary.pass).toBe(10);
 	});
 });
 
