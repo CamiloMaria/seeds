@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { findSeedsDir } from "../config.ts";
+import { parseExecutionFlags } from "../execution.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { issuesPath, readIssues, withLock, writeIssues } from "../store.ts";
 import type { Issue } from "../types.ts";
@@ -48,6 +49,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 	if (!id) throw new Error("Usage: sd update <id> [flags]");
 
 	const flags = parseArgs(args);
+	const { execution, clearExecution } = parseExecutionFlags(flags);
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	let updated: Issue | undefined;
@@ -83,6 +85,15 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			const p = parsePriority(flags.priority);
 			if (Number.isNaN(p) || p < 0 || p > 4) throw new Error("--priority must be 0-4 or P0-P4");
 			patch.priority = p;
+		}
+		if (clearExecution) {
+			patch.execution = undefined;
+		}
+		if (execution) {
+			patch.execution = {
+				...(clearExecution ? {} : (issue.execution ?? {})),
+				...execution,
+			};
 		}
 
 		if (typeof flags["set-labels"] === "string") {
@@ -136,6 +147,19 @@ export function register(program: Command): void {
 		.option("--desc <text>", "New description (alias for --description)")
 		.option("--type <type>", "New type (task|bug|feature|epic)")
 		.option("--priority <n>", "New priority 0-4 or P0-P4")
+		.option("--capability <name>", "Execution hint: default Overstory capability")
+		.option("--files <paths>", "Execution hint: comma-separated file scope")
+		.option(
+			"--review-required [value]",
+			"Execution hint: review required (true/false, defaults to true when flag is present)",
+		)
+		.option(
+			"--swarmable [value]",
+			"Execution hint: swarmable (true/false, defaults to true when flag is present)",
+		)
+		.option("--runtime <name>", "Execution hint: default Overstory runtime")
+		.option("--profile <name>", "Execution hint: default Overstory profile")
+		.option("--clear-execution", "Remove all execution metadata")
 		.option("--add-label <labels>", "Add label(s) (comma-separated)")
 		.option("--remove-label <labels>", "Remove label(s) (comma-separated)")
 		.option("--set-labels <labels>", "Set labels (comma-separated, empty to clear)")
@@ -151,6 +175,13 @@ export function register(program: Command): void {
 					desc?: string;
 					type?: string;
 					priority?: string;
+					capability?: string;
+					files?: string;
+					reviewRequired?: string | boolean;
+					swarmable?: string | boolean;
+					runtime?: string;
+					profile?: string;
+					clearExecution?: boolean;
 					addLabel?: string;
 					removeLabel?: string;
 					setLabels?: string;
@@ -165,6 +196,15 @@ export function register(program: Command): void {
 				if (opts.desc) args.push("--desc", opts.desc);
 				if (opts.type) args.push("--type", opts.type);
 				if (opts.priority) args.push("--priority", opts.priority);
+				if (opts.capability) args.push("--capability", opts.capability);
+				if (opts.files) args.push("--files", opts.files);
+				if (opts.reviewRequired !== undefined) {
+					args.push("--review-required", String(opts.reviewRequired));
+				}
+				if (opts.swarmable !== undefined) args.push("--swarmable", String(opts.swarmable));
+				if (opts.runtime) args.push("--runtime", opts.runtime);
+				if (opts.profile) args.push("--profile", opts.profile);
+				if (opts.clearExecution) args.push("--clear-execution");
 				if (opts.addLabel) args.push("--add-label", opts.addLabel);
 				if (opts.removeLabel) args.push("--remove-label", opts.removeLabel);
 				if (opts.setLabels !== undefined) args.push("--set-labels", opts.setLabels);

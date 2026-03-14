@@ -1,3 +1,25 @@
+export const VALID_EXECUTION_CAPABILITIES = [
+	"scout",
+	"builder",
+	"reviewer",
+	"lead",
+	"merger",
+	"coordinator",
+	"supervisor",
+	"monitor",
+] as const;
+
+export type ExecutionCapability = (typeof VALID_EXECUTION_CAPABILITIES)[number];
+
+export interface ExecutionMetadata {
+	capability?: ExecutionCapability;
+	fileScope?: string[];
+	reviewRequired?: boolean;
+	swarmable?: boolean;
+	runtime?: string;
+	profile?: string;
+}
+
 export interface Issue {
 	id: string;
 	title: string;
@@ -11,6 +33,7 @@ export interface Issue {
 	blockedBy?: string[];
 	labels?: string[];
 	convoy?: string;
+	execution?: ExecutionMetadata;
 	createdAt: string;
 	updatedAt: string;
 	closedAt?: string;
@@ -20,6 +43,7 @@ export interface TemplateStep {
 	title: string;
 	type?: string;
 	priority?: number;
+	execution?: ExecutionMetadata;
 }
 
 export interface Template {

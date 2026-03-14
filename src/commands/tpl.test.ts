@@ -117,6 +117,44 @@ describe("sd tpl step add", () => {
 		expect(step?.type ?? "task").toBe("task");
 		expect(step?.priority ?? 2).toBe(2);
 	});
+
+	test("stores execution metadata on template steps", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["tpl", "create", "--name", "execution-template"],
+			tmpDir,
+		);
+		await run(
+			[
+				"tpl",
+				"step",
+				"add",
+				create.id,
+				"--title",
+				"Build: {prefix}",
+				"--capability",
+				"builder",
+				"--files",
+				"src/api.ts",
+				"--runtime",
+				"codex",
+			],
+			tmpDir,
+		);
+		const show = await runJson<{
+			success: boolean;
+			template: {
+				steps: Array<{
+					execution?: { capability?: string; fileScope?: string[]; runtime?: string };
+				}>;
+			};
+		}>(["tpl", "show", create.id], tmpDir);
+
+		expect(show.template.steps[0]?.execution).toEqual({
+			capability: "builder",
+			fileScope: ["src/api.ts"],
+			runtime: "codex",
+		});
+	});
 });
 
 describe("sd tpl list", () => {
@@ -170,6 +208,35 @@ describe("sd tpl show", () => {
 		expect(result.success).toBe(false);
 		expect(result.error).toBeTruthy();
 	});
+
+	test("plain tpl show exposes step execution metadata", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["tpl", "create", "--name", "show-execution"],
+			tmpDir,
+		);
+		await run(
+			[
+				"tpl",
+				"step",
+				"add",
+				create.id,
+				"--title",
+				"Review: {prefix}",
+				"--capability",
+				"reviewer",
+				"--review-required",
+				"--profile",
+				"reviewer",
+			],
+			tmpDir,
+		);
+
+		const result = await run(["tpl", "show", create.id], tmpDir);
+
+		expect(result.stdout).toContain("cap:reviewer");
+		expect(result.stdout).toContain("review:yes");
+		expect(result.stdout).toContain("profile:reviewer");
+	});
 });
 
 describe("sd tpl pour", () => {
@@ -206,6 +273,42 @@ describe("sd tpl pour", () => {
 			tmpDir,
 		);
 		expect(show.issue.title).toBe("Build: oauth");
+	});
+
+	test("tpl pour copies step execution metadata into created issues", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["tpl", "create", "--name", "execution-convoy"],
+			tmpDir,
+		);
+		await run(
+			[
+				"tpl",
+				"step",
+				"add",
+				create.id,
+				"--title",
+				"Review: {prefix}",
+				"--capability",
+				"reviewer",
+				"--profile",
+				"reviewer",
+			],
+			tmpDir,
+		);
+
+		const pour = await runJson<{ success: boolean; ids: string[] }>(
+			["tpl", "pour", create.id, "--prefix", "auth"],
+			tmpDir,
+		);
+		const show = await runJson<{
+			success: boolean;
+			issue: { execution?: { capability?: string; profile?: string } };
+		}>(["show", pour.ids[0] ?? ""], tmpDir);
+
+		expect(show.issue.execution).toEqual({
+			capability: "reviewer",
+			profile: "reviewer",
+		});
 	});
 
 	test("step N+1 is blocked by step N (convoy dependency chain)", async () => {

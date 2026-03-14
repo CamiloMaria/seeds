@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
+import { parseExecutionFlags } from "../execution.ts";
 import { generateId } from "../id.ts";
 import { outputJson, printSuccess } from "../output.ts";
 import { appendIssue, issuesPath, readIssues, withLock } from "../store.ts";
@@ -79,6 +80,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			: typeof flags.desc === "string"
 				? flags.desc
 				: undefined;
+	const { execution } = parseExecutionFlags(flags);
 
 	const dir = seedsDir ?? (await findSeedsDir());
 	const config = await readConfig(dir);
@@ -100,6 +102,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			...(assignee ? { assignee } : {}),
 			...(description ? { description } : {}),
 			...(labels && labels.length > 0 ? { labels } : {}),
+			...(execution ? { execution } : {}),
 		};
 		await appendIssue(dir, issue);
 		createdId = id;
@@ -123,6 +126,18 @@ export function register(program: Command): void {
 		.option("--description <text>", "Issue description")
 		.option("--desc <text>", "Issue description (alias for --description)")
 		.option("--labels <labels>", "Comma-separated labels")
+		.option("--capability <name>", "Execution hint: default Overstory capability")
+		.option("--files <paths>", "Execution hint: comma-separated file scope")
+		.option(
+			"--review-required [value]",
+			"Execution hint: review required (true/false, defaults to true when flag is present)",
+		)
+		.option(
+			"--swarmable [value]",
+			"Execution hint: swarmable (true/false, defaults to true when flag is present)",
+		)
+		.option("--runtime <name>", "Execution hint: default Overstory runtime")
+		.option("--profile <name>", "Execution hint: default Overstory profile")
 		.option("--json", "Output as JSON")
 		.action(
 			async (opts: {
@@ -133,6 +148,12 @@ export function register(program: Command): void {
 				description?: string;
 				desc?: string;
 				labels?: string;
+				capability?: string;
+				files?: string;
+				reviewRequired?: string | boolean;
+				swarmable?: string | boolean;
+				runtime?: string;
+				profile?: string;
 				json?: boolean;
 			}) => {
 				const args: string[] = ["--title", opts.title];
@@ -142,6 +163,14 @@ export function register(program: Command): void {
 				if (opts.description) args.push("--description", opts.description);
 				if (opts.desc) args.push("--desc", opts.desc);
 				if (opts.labels) args.push("--labels", opts.labels);
+				if (opts.capability) args.push("--capability", opts.capability);
+				if (opts.files) args.push("--files", opts.files);
+				if (opts.reviewRequired !== undefined) {
+					args.push("--review-required", String(opts.reviewRequired));
+				}
+				if (opts.swarmable !== undefined) args.push("--swarmable", String(opts.swarmable));
+				if (opts.runtime) args.push("--runtime", opts.runtime);
+				if (opts.profile) args.push("--profile", opts.profile);
 				if (opts.json) args.push("--json");
 				await run(args);
 			},

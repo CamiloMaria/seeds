@@ -3,9 +3,10 @@ import { join } from "node:path";
 import chalk from "chalk";
 import type { Command } from "commander";
 import { findSeedsDir, projectRootFromSeedsDir, readConfig } from "../config.ts";
+import { validateExecutionMetadata } from "../execution.ts";
 import { brand, muted, outputJson } from "../output.ts";
 import { readIssues } from "../store.ts";
-import type { Issue, Template } from "../types.ts";
+import type { ExecutionMetadata, Issue, Template } from "../types.ts";
 import {
 	ISSUES_FILE,
 	LOCK_STALE_MS,
@@ -145,6 +146,44 @@ function checkSchemaValidation(seedsDir: string): DoctorCheck {
 		if (typeof issue.priority === "number" && (issue.priority < 0 || issue.priority > 4)) {
 			details.push(`${id}: invalid priority ${String(issue.priority)} (must be 0-4)`);
 		}
+		if (issue.execution !== undefined) {
+			if (typeof issue.execution !== "object" || issue.execution === null) {
+				details.push(`${id}: execution must be an object`);
+			} else {
+				details.push(...validateExecutionMetadata(issue.execution as ExecutionMetadata, id));
+			}
+		}
+	}
+
+	const templateLines = readRawLines(join(seedsDir, TEMPLATES_FILE));
+	for (const line of templateLines) {
+		if (!line.parsed) continue;
+		const template = line.parsed as Record<string, unknown>;
+		const id = typeof template.id === "string" ? template.id : `template line ${String(line.lineNumber)}`;
+		if (template.steps === undefined) continue;
+		if (!Array.isArray(template.steps)) {
+			details.push(`${id}: steps must be an array`);
+			continue;
+		}
+		template.steps.forEach((rawStep, index) => {
+			if (typeof rawStep !== "object" || rawStep === null) {
+				details.push(`${id}.steps[${String(index)}]: step must be an object`);
+				return;
+			}
+			const step = rawStep as Record<string, unknown>;
+			if (step.execution !== undefined) {
+				if (typeof step.execution !== "object" || step.execution === null) {
+					details.push(`${id}.steps[${String(index)}]: execution must be an object`);
+					} else {
+						details.push(
+							...validateExecutionMetadata(
+								step.execution as ExecutionMetadata,
+								`${id}.steps[${String(index)}]`,
+							),
+						);
+				}
+			}
+		});
 	}
 	if (details.length > 0) {
 		return {

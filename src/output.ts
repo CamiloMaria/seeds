@@ -68,6 +68,21 @@ export function printIssueFull(issue: Issue): void {
 	if (issue.blocks?.length)
 		console.log(`Blocks:     ${issue.blocks.map((id) => accent(id)).join(", ")}`);
 	if (issue.convoy) console.log(`Convoy:   ${muted(issue.convoy)}`);
+	if (issue.execution) {
+		console.log("Execution:");
+		if (issue.execution.capability) console.log(`  Capability: ${muted(issue.execution.capability)}`);
+		if (issue.execution.fileScope?.length) {
+			console.log(`  Files:      ${muted(issue.execution.fileScope.join(", "))}`);
+		}
+		if (issue.execution.runtime) console.log(`  Runtime:    ${muted(issue.execution.runtime)}`);
+		if (issue.execution.profile) console.log(`  Profile:    ${muted(issue.execution.profile)}`);
+		if (issue.execution.reviewRequired !== undefined) {
+			console.log(`  Review:     ${muted(String(issue.execution.reviewRequired))}`);
+		}
+		if (issue.execution.swarmable !== undefined) {
+			console.log(`  Swarmable:  ${muted(String(issue.execution.swarmable))}`);
+		}
+	}
 	if (issue.closeReason) console.log(`Reason:   ${issue.closeReason}`);
 	console.log(`Created:  ${muted(issue.createdAt)}`);
 	console.log(`Updated:  ${muted(issue.updatedAt)}`);

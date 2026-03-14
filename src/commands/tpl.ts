@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { Command } from "commander";
 import { findSeedsDir, readConfig } from "../config.ts";
+import { parseExecutionFlags } from "../execution.ts";
 import { generateId } from "../id.ts";
 import { accent, muted, outputJson, printIssueOneLine, printSuccess } from "../output.ts";
 import {
@@ -50,6 +51,24 @@ function parseArgs(args: string[]) {
 	return { flags, positional };
 }
 
+function formatStepExecution(step: TemplateStep): string[] {
+	if (!step.execution) return [];
+
+	const details: string[] = [];
+	if (step.execution.capability) details.push(`cap:${step.execution.capability}`);
+	if (step.execution.fileScope?.length) details.push(`files:${step.execution.fileScope.join(",")}`);
+	if (step.execution.runtime) details.push(`runtime:${step.execution.runtime}`);
+	if (step.execution.profile) details.push(`profile:${step.execution.profile}`);
+	if (step.execution.reviewRequired !== undefined) {
+		details.push(`review:${step.execution.reviewRequired ? "yes" : "no"}`);
+	}
+	if (step.execution.swarmable !== undefined) {
+		details.push(`swarmable:${step.execution.swarmable ? "yes" : "no"}`);
+	}
+
+	return details;
+}
+
 export async function run(args: string[], seedsDir?: string): Promise<void> {
 	const jsonMode = args.includes("--json");
 	const { flags, positional } = parseArgs(args);
@@ -97,6 +116,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 		}
 		const priorityStr = typeof flags.priority === "string" ? flags.priority : "2";
 		const priority = Number.parseInt(priorityStr, 10);
+		const { execution } = parseExecutionFlags(flags);
 
 		let stepCount = 0;
 		await withLock(templatesPath(dir), async () => {
@@ -104,7 +124,12 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			const idx = templates.findIndex((t) => t.id === templateId);
 			if (idx === -1) throw new Error(`Template not found: ${templateId}`);
 			const tpl = templates[idx]!;
-			const step: TemplateStep = { title, type: typeVal, priority };
+			const step: TemplateStep = {
+				title,
+				type: typeVal,
+				priority,
+				...(execution ? { execution } : {}),
+			};
 			templates[idx] = { ...tpl, steps: [...tpl.steps, step] };
 			stepCount = templates[idx]?.steps.length;
 			await writeTemplates(dir, templates);
@@ -149,8 +174,9 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 			console.log(`${accent.bold(tpl.id)}  ${tpl.name}`);
 			console.log(muted(`Steps (${tpl.steps.length}):`));
 			tpl.steps.forEach((step, i) => {
+				const execution = formatStepExecution(step);
 				console.log(
-					`  ${i + 1}. ${step.title}  ${muted(`[${step.type ?? "task"} P${step.priority ?? 2}]`)}`,
+					`  ${i + 1}. ${step.title}  ${muted(`[${step.type ?? "task"} P${step.priority ?? 2}]`)}${execution.length > 0 ? ` ${muted(`{${execution.join(" · ")}}`)}` : ""}`,
 				);
 			});
 		}
@@ -194,6 +220,7 @@ export async function run(args: string[], seedsDir?: string): Promise<void> {
 					createdAt: now,
 					updatedAt: now,
 					convoy: templateId,
+					...(step.execution ? { execution: step.execution } : {}),
 				};
 				newIssues.push(issue);
 				createdIds.push(id);
@@ -298,15 +325,46 @@ export function register(program: Command): void {
 		.requiredOption("--title <text>", "Step title")
 		.option("--type <type>", "Step type (task|bug|feature|epic)", "task")
 		.option("--priority <n>", "Step priority 0-4", "2")
+		.option("--capability <name>", "Execution hint: default Overstory capability")
+		.option("--files <paths>", "Execution hint: comma-separated file scope")
+		.option(
+			"--review-required [value]",
+			"Execution hint: review required (true/false, defaults to true when flag is present)",
+		)
+		.option(
+			"--swarmable [value]",
+			"Execution hint: swarmable (true/false, defaults to true when flag is present)",
+		)
+		.option("--runtime <name>", "Execution hint: default Overstory runtime")
+		.option("--profile <name>", "Execution hint: default Overstory profile")
 		.option("--json", "Output as JSON")
 		.action(
 			async (
 				id: string,
-				opts: { title: string; type?: string; priority?: string; json?: boolean },
+				opts: {
+					title: string;
+					type?: string;
+					priority?: string;
+					capability?: string;
+					files?: string;
+					reviewRequired?: string | boolean;
+					swarmable?: string | boolean;
+					runtime?: string;
+					profile?: string;
+					json?: boolean;
+				},
 			) => {
 				const args: string[] = ["step", "add", id, "--title", opts.title];
 				if (opts.type) args.push("--type", opts.type);
 				if (opts.priority) args.push("--priority", opts.priority);
+				if (opts.capability) args.push("--capability", opts.capability);
+				if (opts.files) args.push("--files", opts.files);
+				if (opts.reviewRequired !== undefined) {
+					args.push("--review-required", String(opts.reviewRequired));
+				}
+				if (opts.swarmable !== undefined) args.push("--swarmable", String(opts.swarmable));
+				if (opts.runtime) args.push("--runtime", opts.runtime);
+				if (opts.profile) args.push("--profile", opts.profile);
 				if (opts.json) args.push("--json");
 				await run(args);
 			},

@@ -175,6 +175,111 @@ describe("doctor: schema-validation check", () => {
 		const check = result.checks.find((ch) => ch.name === "schema-validation");
 		expect(check?.status).toBe("pass");
 	});
+
+	test("passes with partial execution metadata on issues and template steps", async () => {
+		await run(["init"], tmpDir);
+		const now = new Date().toISOString();
+		const issue = JSON.stringify({
+			id: "test-0001",
+			title: "Partial execution",
+			status: "open",
+			type: "task",
+			priority: 2,
+			execution: {
+				capability: "builder",
+			},
+			createdAt: now,
+			updatedAt: now,
+		});
+		const template = JSON.stringify({
+			id: "tpl-0001",
+			name: "Partial template",
+			steps: [
+				{
+					title: "Step 1",
+					execution: {
+						runtime: "codex",
+					},
+				},
+			],
+		});
+		writeFileSync(join(seedsDir(tmpDir), "issues.jsonl"), `${issue}\n`);
+		writeFileSync(join(seedsDir(tmpDir), "templates.jsonl"), `${template}\n`);
+
+		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
+		const check = result.checks.find((ch) => ch.name === "schema-validation");
+		expect(check?.status).toBe("pass");
+	});
+
+	test("fails with invalid execution capability", async () => {
+		await run(["init"], tmpDir);
+		const now = new Date().toISOString();
+		const bad = JSON.stringify({
+			id: "test-0001",
+			title: "Bad execution",
+			status: "open",
+			type: "task",
+			priority: 2,
+			execution: {
+				capability: "invalid-capability",
+			},
+			createdAt: now,
+			updatedAt: now,
+		});
+		writeFileSync(join(seedsDir(tmpDir), "issues.jsonl"), `${bad}\n`);
+
+		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
+		const check = result.checks.find((ch) => ch.name === "schema-validation");
+		expect(check?.status).toBe("fail");
+		expect(check?.details.some((detail) => detail.includes("execution.capability"))).toBe(true);
+	});
+
+	test("fails with invalid execution fileScope shape", async () => {
+		await run(["init"], tmpDir);
+		const now = new Date().toISOString();
+		const bad = JSON.stringify({
+			id: "test-0001",
+			title: "Bad execution files",
+			status: "open",
+			type: "task",
+			priority: 2,
+			execution: {
+				fileScope: ["src/a.ts", ""],
+			},
+			createdAt: now,
+			updatedAt: now,
+		});
+		writeFileSync(join(seedsDir(tmpDir), "issues.jsonl"), `${bad}\n`);
+
+		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
+		const check = result.checks.find((ch) => ch.name === "schema-validation");
+		expect(check?.status).toBe("fail");
+		expect(check?.details.some((detail) => detail.includes("execution.fileScope"))).toBe(true);
+	});
+
+	test("fails with invalid template step execution metadata", async () => {
+		await run(["init"], tmpDir);
+		const badTemplate = JSON.stringify({
+			id: "tpl-0001",
+			name: "Bad template",
+			steps: [
+				{
+					title: "Step 1",
+					execution: {
+						profile: "",
+					},
+				},
+			],
+		});
+		writeFileSync(join(seedsDir(tmpDir), "templates.jsonl"), `${badTemplate}\n`);
+
+		const result = await runJson<DoctorResult>(["doctor"], tmpDir);
+		const check = result.checks.find((ch) => ch.name === "schema-validation");
+		expect(check?.status).toBe("fail");
+		expect(check?.details.some((detail) => detail.includes(".steps[0].execution.profile"))).toBe(
+			true,
+		);
+	});
 });
 
 describe("doctor: duplicate-ids check", () => {

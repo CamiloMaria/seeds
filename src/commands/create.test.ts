@@ -185,6 +185,49 @@ describe("sd create", () => {
 		// Should be valid ISO 8601
 		expect(new Date(show.issue.createdAt).toISOString()).toBe(show.issue.createdAt);
 	});
+
+	test("stores execution metadata on create", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			[
+				"create",
+				"--title",
+				"Execution-aware issue",
+				"--capability",
+				"builder",
+				"--files",
+				"src/a.ts,src/b.ts",
+				"--review-required",
+				"--swarmable=false",
+				"--runtime",
+				"codex",
+				"--profile",
+				"builder",
+			],
+			tmpDir,
+		);
+		const show = await runJson<{
+			success: boolean;
+			issue: {
+				execution?: {
+					capability?: string;
+					fileScope?: string[];
+					reviewRequired?: boolean;
+					swarmable?: boolean;
+					runtime?: string;
+					profile?: string;
+				};
+			};
+		}>(["show", create.id], tmpDir);
+
+		expect(show.issue.execution).toEqual({
+			capability: "builder",
+			fileScope: ["src/a.ts", "src/b.ts"],
+			reviewRequired: true,
+			swarmable: false,
+			runtime: "codex",
+			profile: "builder",
+		});
+	});
 });
 
 describe("sd show", () => {
@@ -209,6 +252,27 @@ describe("sd show", () => {
 		);
 		expect(result.success).toBe(false);
 		expect(result.error).toBeTruthy();
+	});
+
+	test("show --json preserves execution metadata unchanged", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			[
+				"create",
+				"--title",
+				"Execution show test",
+				"--capability",
+				"lead",
+				"--runtime",
+				"gemini",
+			],
+			tmpDir,
+		);
+		const show = await runJson<{
+			success: boolean;
+			issue: { execution?: { capability?: string; runtime?: string } };
+		}>(["show", create.id], tmpDir);
+
+		expect(show.issue.execution).toEqual({ capability: "lead", runtime: "gemini" });
 	});
 });
 
@@ -317,6 +381,52 @@ describe("sd update", () => {
 			tmpDir,
 		);
 		expect(show.issue.priority).toBe(0);
+	});
+
+	test("sets execution metadata on update", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["create", "--title", "Update execution"],
+			tmpDir,
+		);
+		await run(
+			[
+				"update",
+				create.id,
+				"--capability",
+				"reviewer",
+				"--files",
+				"docs/a.md",
+				"--runtime",
+				"cursor",
+			],
+			tmpDir,
+		);
+		const show = await runJson<{
+			success: boolean;
+			issue: {
+				execution?: { capability?: string; fileScope?: string[]; runtime?: string };
+			};
+		}>(["show", create.id], tmpDir);
+
+		expect(show.issue.execution).toEqual({
+			capability: "reviewer",
+			fileScope: ["docs/a.md"],
+			runtime: "cursor",
+		});
+	});
+
+	test("clear-execution removes execution metadata", async () => {
+		const create = await runJson<{ success: boolean; id: string }>(
+			["create", "--title", "Clear execution", "--capability", "builder"],
+			tmpDir,
+		);
+		await run(["update", create.id, "--clear-execution"], tmpDir);
+		const show = await runJson<{
+			success: boolean;
+			issue: { execution?: unknown };
+		}>(["show", create.id], tmpDir);
+
+		expect(show.issue.execution).toBeUndefined();
 	});
 
 	test("updates updatedAt timestamp", async () => {
